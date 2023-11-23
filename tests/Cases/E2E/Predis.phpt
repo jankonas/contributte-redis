@@ -162,3 +162,63 @@ Toolkit::test(function () use ($storage, $client, $generateJournalKey): void {
 	Assert::same(0, $client->exists($generateJournalKey('foo', RedisJournal::SUFFIX_TAGS, true)));
 	Assert::same(0, $client->exists($generateJournalKey('tag', RedisJournal::SUFFIX_KEYS, false)));
 });
+
+// Tags expiration
+Toolkit::test(function () use ($storage, $client, $generateJournalKey): void {
+	$storage->clean([Cache::ALL => true]);
+
+	// -- test 1 --
+	// entry without expiration
+	$storage->write('foo1', 'bar', [Cache::TAGS => ['tag1']]);
+	Assert::same(-1, $client->ttl($generateJournalKey('foo1', RedisJournal::SUFFIX_TAGS, true)));
+	Assert::same(-1, $client->ttl($generateJournalKey('tag1', RedisJournal::SUFFIX_KEYS, false)));
+
+	// add entry with expiration
+	$storage->write('foo2', 'bar', [Cache::EXPIRATION => 1, Cache::TAGS => ['tag1']]);
+	Assert::same(1, $client->ttl($generateJournalKey('foo2', RedisJournal::SUFFIX_TAGS, true)));
+	Assert::same(-1, $client->ttl($generateJournalKey('tag1', RedisJournal::SUFFIX_KEYS, false)));
+
+	$storage->clean([Cache::ALL => true]);
+
+	// -- test 2 --
+	// entry with expiration
+	$storage->write('foo1', 'bar', [Cache::EXPIRATION => 10, Cache::TAGS => ['tag1']]);
+	Assert::same(10, $client->ttl($generateJournalKey('foo1', RedisJournal::SUFFIX_TAGS, true)));
+	// TODO: Assert::same(10, $client->ttl($generateJournalKey('tag1', RedisJournal::SUFFIX_KEYS, false)));
+
+	// keep longer expiration
+	$storage->write('foo2', 'bar', [Cache::EXPIRATION => 5, Cache::TAGS => ['tag1']]);
+	Assert::same(5, $client->ttl($generateJournalKey('foo2', RedisJournal::SUFFIX_TAGS, true)));
+	// TODO: Assert::same(10, $client->ttl($generateJournalKey('tag1', RedisJournal::SUFFIX_KEYS, false))); // TODO: maybe get TTL from `Contributte.Storage:foo1` instead of hardcoded 10
+
+	// shorten expiration
+	$storage->remove('foo1');
+	// TODO: Assert::same(5, $client->ttl($generateJournalKey('tag1', RedisJournal::SUFFIX_KEYS, false))); // TODO: maybe get TTL from `Contributte.Storage:foo2` instead of hardcoded 5
+
+	// clear expiration
+	$storage->write('foo3', 'bar', [Cache::TAGS => ['tag1']]);
+	Assert::same(-1, $client->ttl($generateJournalKey('foo3', RedisJournal::SUFFIX_TAGS, true)));
+	// TODO: Assert::same(-1, $client->ttl($generateJournalKey('tag1', RedisJournal::SUFFIX_KEYS, false)));
+
+	// return expiration
+	$storage->remove('foo3');
+	// TODO: Assert::same(5, $client->ttl($generateJournalKey('tag1', RedisJournal::SUFFIX_KEYS, false))); // TODO: maybe get TTL from `Contributte.Storage:foo2` instead of hardcoded 5
+
+	$storage->clean([Cache::ALL => true]);
+
+	// -- test 3 --
+	$storage->write('foo1', 'bar', [Cache::EXPIRATION => 5, Cache::TAGS => ['tag1']]);
+	$storage->write('foo2', 'bar', [Cache::EXPIRATION => 10, Cache::TAGS => ['tag1', 'tag2']]);
+	$storage->write('foo3', 'bar', [Cache::TAGS => ['tag1', 'tag2', 'tag3']]);
+	// TODO: Assert::same(10, $client->ttl($generateJournalKey('tag1', RedisJournal::SUFFIX_KEYS, false)));
+	Assert::same(-1, $client->ttl($generateJournalKey('tag2', RedisJournal::SUFFIX_KEYS, false)));
+	Assert::same(-1, $client->ttl($generateJournalKey('tag3', RedisJournal::SUFFIX_KEYS, false)));
+	$storage->clean([Cache::TAGS => ['tag3']]);
+	// TODO: Assert::same(10, $client->ttl($generateJournalKey('tag1', RedisJournal::SUFFIX_KEYS, false))); // TODO: maybe get TTL from `Contributte.Storage:foo2` instead of hardcoded 10
+	// TODO: Assert::same(10, $client->ttl($generateJournalKey('tag2', RedisJournal::SUFFIX_KEYS, false))); // TODO: maybe get TTL from `Contributte.Storage:foo2` instead of hardcoded 10
+	$storage->clean([Cache::TAGS => ['tag2']]);
+	// TODO: Assert::same(5, $client->ttl($generateJournalKey('tag1', RedisJournal::SUFFIX_KEYS, false))); // TODO: maybe get TTL from `Contributte.Storage:foo1` instead of hardcoded 5
+
+	// TODO: check expiration adjustment for SLIDING expire
+	// TODO: adjust tag:keys expiration after deletion by priority
+});

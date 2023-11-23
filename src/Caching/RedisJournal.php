@@ -44,10 +44,18 @@ final class RedisJournal implements Journal
 		foreach (array_unique($tags) as $tag) {
 			$this->client->sadd($this->formatKey($tag, self::SUFFIX_KEYS), [$key]);
 			$this->client->sadd($this->formatKey($key, self::SUFFIX_TAGS), [$tag]);
+
+			// TODO: check tag keys - $this->formatKey($tag, self::KEYS) - and adjust expiration
 		}
 
 		if (isset($dependencies[Cache::PRIORITY])) {
 			$this->client->zadd($this->formatKey(self::KEY_PRIORITY), [$key => $dependencies[Cache::PRIORITY]]);
+		}
+
+		if (isset($dependencies[Cache::EXPIRATION])) {
+			$this->client->expire($this->formatKey($key, self::SUFFIX_TAGS), $dependencies[Cache::EXPIRATION]); // expire key tags when the key expires
+		} else {
+			$this->client->persist($this->formatKey($key, self::SUFFIX_TAGS));
 		}
 
 		$this->client->exec();

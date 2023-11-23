@@ -226,6 +226,7 @@ final class RedisStorage implements Storage
 		do {
 			if (!empty($meta[self::META_DELTA])) {
 				$this->client->expire($this->formatEntryKey($meta[self::KEY]), $meta[self::META_DELTA]);
+				// TODO: slide journal too
 
 			} elseif (!empty($meta[self::META_EXPIRE]) && $meta[self::META_EXPIRE] < time()) {
 				break;
